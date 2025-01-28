@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            font-family: system-ui, sans-serif;
+        }
+        canvas {
+            border: 2px solid #333;
+            background: #076324;
+        }
+        .controls {
+            display: flex;
+            gap: 1rem;
+        }
+        button {
+            padding: 0.5rem 1rem;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        #message {
+            color: #fff;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Elliptical Pool Challenge</h2>
+        <div id="message">You won! The ball went through the hole!</div>
+        <canvas id="poolTable" width="600" height="400"></canvas>
+        <div class="controls">
+            <button id="reset">Reset Ball</button>
+            <button id="showPath">Show/Hide Path</button>
+        </div>
+        <p>Click to place the ball on the left side, hold to aim, release to shoot!</p>
+        <p>Goal: Get the ball through the right focal point using the wall's reflection!</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('poolTable');
+        const ctx = canvas.getContext('2d');
+        const resetBtn = document.getElementById('reset');
+        const showPathBtn = document.getElementById('showPath');
+        const messageEl = document.getElementById('message');
+
+        const centerX = 300;
+        const centerY = 200;
+        const a = 250;
+        const b = 150;
+        const c = Math.sqrt(a * a - b * b);
+        const focus1 = { x: centerX - c, y: centerY, radius: 4 };
+        const focus2 = { x: centerX + c, y: centerY, radius: 12 };
+        const holeRadius = 12;
+
+        const wall = {
+            x: centerX,
+            y1: centerY - b + 30,
+            y2: centerY + b - 30,
+            width: 8
+        };
+
+        let ball = {
+            x: centerX - c,
+            y: centerY,
+            radius: 8,
+            dx: 0,
+            dy: 0,
+            speed: 0,
+            moving: false,
+            placed: false,
+            won: false
+        };
+
+        let showPath = false;
+        let isDragging = false;
+        let dragStart = { x: 0, y: 0 };
+        let path = [];
+
+        // Utility functions
+        function isPointInEllipse(x, y) {
+            const dx = x - centerX;
+            const dy = y - centerY;
+            return (dx * dx) / (a * a) + (dy * dy) / (b * b) <= 1;
+        }
+
+        function isInLeftHalf(x) {
+            return x < centerX;
+        }
+
+        function normalize(vector) {
+            const length = Math.sqrt(vector.x * vector.x + vector.y * vector.y);
+            return {
+                x: vector.x / length,
+                y: vector.y / length
+            };
+        }
+
+        function reflect(velocity, normal) {
+            const dot = velocity.x * normal.x + velocity.y * normal.y;
+            return {
+                x: velocity.x - 2 * dot * normal.x,
+                y: velocity.y - 2 * dot * normal.y
+            };
+        }
+
+        function getNormalAtPoint(x, y) {
+            const dx = x - centerX;
+            const dy = y - centerY;
+            return {
+                x: 2 * dx / (a * a),
+                y: 2 * dy / (b * b)
+            };
+        }
+
+        function findIntersection(x1, y1, x2, y2) {
+            let low = 0;
+            let high = 1;
+            let mid;
+            
+            for (let i = 0; i < 20; i++) {
+                mid = (low + high) / 2;
+                const x = x1 + (x2 - x1) * mid;
+                const y = y1 + (y2 - y1) * mid;
+                
+                if (isPointInEllipse(x, y)) {
+                    low = mid;
+                } else {
+                    high = mid;
+                }
+            }
+            
+            return {
+                x: x1 + (x2 - x1) * mid,
+                y: y1 + (y2 - y1) * mid
+            };
+        }
+
+        function intersectsWall(x1, y1, x2, y2) {
+            if (x1 < wall.x && x2 > wall.x || x1 > wall.x && x2 < wall.x) {
+                const t = (wall.x - x1) / (x2 - x1);
+                const y = y1 + t * (y2 - y1);
+                return y >= wall.y1 && y <= wall.y2;
+            }
+            return false;
+        }
+
+        function reflectOffWall(x1, y1, x2, y2) {
+            const t = (wall.x - x1) / (x2 - x1);
+            const y = y1 + t * (y2 - y1);
+            return {
+                x: wall.x,
+                y: y,
+                normal: { x: 1, y: 0 }
+            };
+        }
+
+        function checkWin() {
+            const dx = ball.x - focus2.x;
+            const dy = ball.y - focus2.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance < holeRadius) {
+                ball.won = true;
+                messageEl.style.display = 'block';
+                ball.moving = false;
+            }
+        }
+
+        // Drawing functions
+        function drawEllipse() {
+            ctx.beginPath();
+            ctx.ellipse(centerX, centerY, a, b, 0, 0, 2 * Math.PI);
+            ctx.strokeStyle = 'white';
+            ctx.stroke();
+        }
+
+        function drawWall() {
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(wall.x - wall.width/2, wall.y1, wall.width, wall.y2 - wall.y1);
+        }
+
+        function drawFoci() {
+            ctx.fillStyle = 'red';
+            ctx.beginPath();
+            ctx.arc(focus1.x, focus1.y, focus1.radius, 0, 2 * Math.PI);
+            ctx.fill();
+
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(focus2.x, focus2.y, focus2.radius, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.strokeStyle = 'white';
+            ctx.stroke();
+        }
+
+        function drawBall() {
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+
+        function drawAimLine() {
+            if (isDragging && ball.placed) {
+                ctx.beginPath();
+                ctx.moveTo(ball.x, ball.y);
+                ctx.lineTo(dragStart.x, dragStart.y);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.stroke();
+            }
+        }
+
+        function drawPath() {
+            if (showPath && path.length > 1) {
+                ctx.beginPath();
+                ctx.moveTo(path[0].x, path[0].y);
+                for (let i = 1; i < path.length; i++) {
+                    ctx.lineTo(path[i].x, path[i].y);
+                }
+                ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
+                ctx.stroke();
+            }
+        }
+
+        function update() {
+            if (ball.moving && !ball.won) {
+                const nextX = ball.x + ball.dx;
+                const nextY = ball.y + ball.dy;
+
+                checkWin();
+
+                if (intersectsWall(ball.x, ball.y, nextX, nextY)) {
+                    const collision = reflectOffWall(ball.x, ball.y, nextX, nextY);
+                    const velocity = { x: ball.dx, y: ball.dy };
+                    const reflected = reflect(velocity, collision.normal);
+                    
+                    ball.x = collision.x;
+                    ball.y = collision.y;
+                    ball.dx = reflected.x;
+                    ball.dy = reflected.y;
+                    
+                    path.push({ x: ball.x, y: ball.y });
+                }
+                else if (!isPointInEllipse(nextX, nextY)) {
+                    const intersection = findIntersection(ball.x, ball.y, nextX, nextY);
+                    const normal = normalize(getNormalAtPoint(intersection.x, intersection.y));
+                    const velocity = { x: ball.dx, y: ball.dy };
+                    const reflected = reflect(velocity, normal);
+                    
+                    ball.x = intersection.x;
+                    ball.y = intersection.y;
+                    ball.dx = reflected.x;
+                    ball.dy = reflected.y;
+                    
+                    path.push({ x: ball.x, y: ball.y });
+                } else {
+                    ball.x = nextX;
+                    ball.y = nextY;
+                }
+
+                const friction = 0.995;
+                ball.dx *= friction;
+                ball.dy *= friction;
+
+                if (Math.abs(ball.dx) < 0.1 && Math.abs(ball.dy) < 0.1) {
+                    ball.moving = false;
+                    ball.dx = 0;
+                    ball.dy = 0;
+                }
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawEllipse();
+            drawWall();
+            drawFoci();
+            drawPath();
+            drawBall();
+            drawAimLine();
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Event listeners
+        canvas.addEventListener('mousedown', (e) => {
+            if (!ball.moving && !ball.won) {
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                if (!ball.placed) {
+                    if (isPointInEllipse(mouseX, mouseY) && isInLeftHalf(mouseX)) {
+                        ball.x = mouseX;
+                        ball.y = mouseY;
+                        ball.placed = true;
+                    }
+                } else {
+                    dragStart.x = mouseX;
+                    dragStart.y = mouseY;
+                    isDragging = true;
+                }
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const rect = canvas.getBoundingClientRect();
+                dragStart.x = e.clientX - rect.left;
+                dragStart.y = e.clientY - rect.top;
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (isDragging) {
+                const power = 0.1;
+                ball.dx = (ball.x - dragStart.x) * power;
+                ball.dy = (ball.y - dragStart.y) * power;
+                ball.moving = true;
+                isDragging = false;
+                path = [{ x: ball.x, y: ball.y }];
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            ball = {
+                x: centerX - c,
+                y: centerY,
+                radius: 8,
+                dx: 0,
+                dy: 0,
+                speed: 0,
+                moving: false,
+                placed: false,
+                won: false
+            };
+            path = [];
+            messageEl.style.display = 'none';
+        });
+
+        showPathBtn.addEventListener('click', () => {
+            showPath = !showPath;
+        });
+
+        gameLoop();
+    </script>
+</body>
+</html>
