@@ -1,7 +1,14 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
         .container {
             display: flex;
             flex-direction: column;
@@ -9,19 +16,57 @@
             gap: 1rem;
             padding: 1rem;
             font-family: system-ui, sans-serif;
+            max-width: 100%;
+            overflow-x: hidden;
+            flex: 1;
         }
         canvas {
             border: 2px solid #333;
             background: #076324;
+            max-width: 100%;
+            height: auto;
+            transition: all 0.3s ease;
+        }
+        .fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 9999;
+            padding: 0;
+            margin: 0;
+            background: #076324;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .fullscreen canvas {
+            border: none;
+            width: 100% !important;
+            height: 100% !important;
+            max-width: none;
+            max-height: none;
+            object-fit: contain;
         }
         .controls {
             display: flex;
             gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
         }
         button {
             padding: 0.5rem 1rem;
             font-size: 1rem;
             cursor: pointer;
+            border: none;
+            background: #333;
+            color: white;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #444;
         }
         #message {
             color: #fff;
@@ -29,20 +74,58 @@
             padding: 0.5rem 1rem;
             border-radius: 4px;
             display: none;
+            text-align: center;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+        }
+        .game-title {
+            font-size: clamp(1.5rem, 5vw, 2rem);
+            text-align: center;
+            margin: 0.5rem 0;
+        }
+        .instructions {
+            text-align: center;
+            font-size: clamp(0.9rem, 4vw, 1rem);
+            padding: 0 1rem;
+        }
+        .fullscreen .controls,
+        .fullscreen .instructions,
+        .fullscreen .game-title {
+            display: none;
+        }
+        @media (max-width: 600px) {
+            .controls {
+                flex-direction: column;
+                width: 100%;
+            }
+            button {
+                width: 100%;
+            }
+            canvas {
+                width: 100%;
+                max-height: 70vh;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>Elliptical Pool Challenge</h2>
-        <div id="message">You won! The ball went through the hole!</div>
+        <h1 class="game-title">Elliptical Pool Challenge</h1>
+        <div id="message" class="win-message">🎉 You won! The ball went through the hole! 🎉</div>
         <canvas id="poolTable" width="900" height="600"></canvas>
         <div class="controls">
-            <button id="reset">Reset Ball</button>
-            <button id="showPath">Show/Hide Path</button>
+            <button id="reset" class="control-btn">🔄 Reset Ball</button>
+            <button id="showPath" class="control-btn">👁️ Toggle Path</button>
+            <button id="fullscreen" class="control-btn">⛶ Fullscreen</button>
         </div>
-        <p>Click to place the ball on the left side, hold to aim, release to shoot!</p>
-        <p>Goal: Get the ball through the right focal point using the wall's reflection!</p>
+        <div class="instructions">
+            <p>🎱 Click to place the ball on the left side</p>
+            <p>🎯 Hold to aim, release to shoot!</p>
+            <p>🎮 Goal: Get the ball through the right focal point using the wall's reflection!</p>
+        </div>
     </div>
 
     <script>
@@ -51,6 +134,79 @@
         const resetBtn = document.getElementById('reset');
         const showPathBtn = document.getElementById('showPath');
         const messageEl = document.getElementById('message');
+        const fullscreenBtn = document.getElementById('fullscreen');
+        const container = document.querySelector('.container');
+
+        // Make canvas responsive
+        function resizeCanvas() {
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
+            const scale = containerWidth / canvas.width;
+            
+            if (!document.fullscreenElement) {
+                const newWidth = Math.min(900, containerWidth);
+                const newHeight = Math.min(600, 600 * (newWidth / 900));
+                canvas.style.width = newWidth + 'px';
+                canvas.style.height = newHeight + 'px';
+            } else {
+                // In fullscreen, maintain aspect ratio while fitting the screen
+                const aspectRatio = canvas.width / canvas.height;
+                const windowRatio = containerWidth / containerHeight;
+                
+                if (windowRatio > aspectRatio) {
+                    // Window is wider than needed
+                    const height = containerHeight;
+                    const width = height * aspectRatio;
+                    canvas.style.width = width + 'px';
+                    canvas.style.height = height + 'px';
+                } else {
+                    // Window is taller than needed
+                    const width = containerWidth;
+                    const height = width / aspectRatio;
+                    canvas.style.width = width + 'px';
+                    canvas.style.height = height + 'px';
+                }
+            }
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Fullscreen handling
+        fullscreenBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                if (container.requestFullscreen) {
+                    container.requestFullscreen();
+                } else if (container.webkitRequestFullscreen) {
+                    container.webkitRequestFullscreen();
+                } else if (container.msRequestFullscreen) {
+                    container.msRequestFullscreen();
+                }
+                container.classList.add('fullscreen');
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+            }
+        });
+
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) {
+                container.classList.remove('fullscreen');
+            }
+            resizeCanvas();
+        });
+
+        document.addEventListener('webkitfullscreenchange', () => {
+            if (!document.webkitFullscreenElement) {
+                container.classList.remove('fullscreen');
+            }
+            resizeCanvas();
+        });
 
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
@@ -229,7 +385,6 @@
                     ctx.lineTo(path[i].x, path[i].y);
                 }
                 ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
-                ctx.lineWidth = 2;
                 ctx.stroke();
             }
         }
@@ -241,6 +396,8 @@
 
                 checkWin();
 
+                path.push({ x: ball.x, y: ball.y });
+
                 if (intersectsWall(ball.x, ball.y, nextX, nextY)) {
                     const collision = reflectOffWall(ball.x, ball.y, nextX, nextY);
                     const velocity = { x: ball.dx, y: ball.dy };
@@ -250,8 +407,6 @@
                     ball.y = collision.y;
                     ball.dx = reflected.x;
                     ball.dy = reflected.y;
-                    
-                    path.push({ x: ball.x, y: ball.y });
                 }
                 else if (!isPointInEllipse(nextX, nextY)) {
                     const intersection = findIntersection(ball.x, ball.y, nextX, nextY);
@@ -263,8 +418,6 @@
                     ball.y = intersection.y;
                     ball.dx = reflected.x;
                     ball.dy = reflected.y;
-                    
-                    path.push({ x: ball.x, y: ball.y });
                 } else {
                     ball.x = nextX;
                     ball.y = nextY;
@@ -299,21 +452,60 @@
         }
 
         // Event listeners
+        function getMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const container = document.querySelector('.container');
+            const isFullscreen = container.classList.contains('fullscreen');
+
+            let scaleX, scaleY, offsetX = 0, offsetY = 0;
+
+            if (isFullscreen) {
+                // Calculate scaling and offsets for object-fit: contain
+                const contentRatio = canvas.width / canvas.height;
+                const containerWidth = rect.width;
+                const containerHeight = rect.height;
+                const containerRatio = containerWidth / containerHeight;
+
+                if (containerRatio > contentRatio) {
+                    // Content is height-bound, horizontal margins
+                    const renderedHeight = containerHeight;
+                    const renderedWidth = renderedHeight * contentRatio;
+                    offsetX = (containerWidth - renderedWidth) / 2;
+                    scaleX = canvas.width / renderedWidth;
+                    scaleY = canvas.height / renderedHeight;
+                } else {
+                    // Content is width-bound, vertical margins
+                    const renderedWidth = containerWidth;
+                    const renderedHeight = renderedWidth / contentRatio;
+                    offsetY = (containerHeight - renderedHeight) / 2;
+                    scaleX = canvas.width / renderedWidth;
+                    scaleY = canvas.height / renderedHeight;
+                }
+            } else {
+                // Normal scaling
+                scaleX = canvas.width / rect.width;
+                scaleY = canvas.height / rect.height;
+            }
+
+            const x = (e.clientX - rect.left - offsetX) * scaleX;
+            const y = (e.clientY - rect.top - offsetY) * scaleY;
+
+            return { x, y };
+        }
+
         canvas.addEventListener('mousedown', (e) => {
             if (!ball.moving && !ball.won) {
-                const rect = canvas.getBoundingClientRect();
-                const mouseX = e.clientX - rect.left;
-                const mouseY = e.clientY - rect.top;
+                const pos = getMousePos(e);
                 
                 if (!ball.placed) {
-                    if (isPointInEllipse(mouseX, mouseY) && isInLeftHalf(mouseX)) {
-                        ball.x = mouseX;
-                        ball.y = mouseY;
+                    if (isPointInEllipse(pos.x, pos.y) && isInLeftHalf(pos.x)) {
+                        ball.x = pos.x;
+                        ball.y = pos.y;
                         ball.placed = true;
                     }
                 } else {
-                    dragStart.x = mouseX;
-                    dragStart.y = mouseY;
+                    dragStart.x = pos.x;
+                    dragStart.y = pos.y;
                     isDragging = true;
                 }
             }
@@ -321,9 +513,9 @@
 
         canvas.addEventListener('mousemove', (e) => {
             if (isDragging) {
-                const rect = canvas.getBoundingClientRect();
-                dragStart.x = e.clientX - rect.left;
-                dragStart.y = e.clientY - rect.top;
+                const pos = getMousePos(e);
+                dragStart.x = pos.x;
+                dragStart.y = pos.y;
             }
         });
 
@@ -336,6 +528,33 @@
                 isDragging = false;
                 path = [{ x: ball.x, y: ball.y }];
             }
+        });
+
+        // Touch events
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousedown', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousemove', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            const mouseEvent = new MouseEvent('mouseup', {});
+            canvas.dispatchEvent(mouseEvent);
         });
 
         resetBtn.addEventListener('click', () => {
