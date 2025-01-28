@@ -36,7 +36,7 @@
     <div class="container">
         <h2>Elliptical Pool Challenge</h2>
         <div id="message">You won! The ball went through the hole!</div>
-        <canvas id="poolTable" width="600" height="400"></canvas>
+        <canvas id="poolTable" width="900" height="600"></canvas>
         <div class="controls">
             <button id="reset">Reset Ball</button>
             <button id="showPath">Show/Hide Path</button>
@@ -52,20 +52,20 @@
         const showPathBtn = document.getElementById('showPath');
         const messageEl = document.getElementById('message');
 
-        const centerX = 300;
-        const centerY = 200;
-        const a = 250;
-        const b = 150;
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const a = canvas.width / 2 - 50;
+        const b = canvas.height / 2 - 50;
         const c = Math.sqrt(a * a - b * b);
         const focus1 = { x: centerX - c, y: centerY, radius: 4 };
         const focus2 = { x: centerX + c, y: centerY, radius: 12 };
-        const holeRadius = 12;
+        const holeRadius = 8;
 
         const wall = {
             x: centerX,
-            y1: centerY - b + 30,
-            y2: centerY + b - 30,
-            width: 8
+            y1: centerY - b + 50,
+            y2: centerY + b - 50,
+            width: 4
         };
 
         let ball = {
@@ -183,7 +183,8 @@
         }
 
         function drawWall() {
-            ctx.fillStyle = '#8B4513';
+            ctx.fillStyle = '#FFFFFF';
+            ctx.lineWidth = 4;
             ctx.fillRect(wall.x - wall.width/2, wall.y1, wall.width, wall.y2 - wall.y1);
         }
 
@@ -228,6 +229,7 @@
                     ctx.lineTo(path[i].x, path[i].y);
                 }
                 ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
+                ctx.lineWidth = 2;
                 ctx.stroke();
             }
         }
@@ -338,8 +340,8 @@
 
         resetBtn.addEventListener('click', () => {
             ball = {
-                x: centerX - c,
-                y: centerY,
+                x: null,
+                y: null,
                 radius: 8,
                 dx: 0,
                 dy: 0,
