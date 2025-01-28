@@ -202,10 +202,12 @@
         }
 
         function drawBall() {
-            ctx.fillStyle = 'white';
-            ctx.beginPath();
-            ctx.arc(ball.x, ball.y, ball.radius, 0, 2 * Math.PI);
-            ctx.fill();
+            if (ball.x !== null && ball.y !== null) {
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, ball.radius, 0, 2 * Math.PI);
+                ctx.fill();
+            }
         }
 
         function drawAimLine() {
